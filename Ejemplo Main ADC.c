@@ -6,7 +6,7 @@
  * Created on July 18, 2021, 7:06 PM
  */
 //******************************************************************************
-// Importaci髇 de Librer韆s
+// Importaci贸n de Librer铆as
 //******************************************************************************
 
 #include <xc.h>
@@ -14,7 +14,7 @@
 #include "ADC_header.h"
 
 //******************************************************************************
-// Palabra de configuraci髇
+// Palabra de configuraci贸n
 //******************************************************************************
 // CONFIG1
 #pragma config FOSC = XT        // Oscillator Selection bits (XT oscillator: Crystal/resonator on RA6/OSC2/CLKOUT and RA7/OSC1/CLKIN)
@@ -88,7 +88,7 @@ void main(void) {
     }
 }
 //******************************************************************************
-// Configuraci髇
+// Configuraci贸n
 //******************************************************************************
 void Setup(void){     
     PORTA = 0;
@@ -125,7 +125,7 @@ void Setup(void){
     //RBIE = 1;   //Habilita interrupciones puerto B
     //RBIF = 0;
     
-    //OPTION_REGbits.T0CS = 0;   // Configuraci髇 para tener un desborde   
+    //OPTION_REGbits.T0CS = 0;   // Configuraci贸n para tener un desborde   
     //OPTION_REGbits.PSA = 0;
     //OPTION_REGbits.PS = 6;     // Prescaler de 64 
     //T0IE = 1;   //Habilita interrupciones timer0
