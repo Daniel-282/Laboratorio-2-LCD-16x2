@@ -1,9 +1,9 @@
 //******************************************************************************
 /* 
- * File:   Pantalla LCD 8 bits Main.c
+ * File:   Comunicación Serial y Pantalla LCD 8 bits Main.c
  * Author: Daniel
  *
- * Created on July 23, 2021, 7:06 PM
+ * Created on July 27, 2021, 11:27 AM
  */
 //******************************************************************************
 // Importación de Librerías
@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include "LCD header.h"
 #include "ADC header.h"
+#include "USART header.h"
 
 //******************************************************************************
 // Prototipos de funciones
@@ -39,22 +40,7 @@ void Setup(void);
 //******************************************************************************
 // Variables
 //******************************************************************************
-unsigned char DISPLAY[0b00010000] =  {'0', //contiene los digitos
-                                      '1', //0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F
-                                      '2', // en formato para ser mostradosendisplay
-                                      '3', // de 7segmentos
-                                      '4',
-                                      '5',
-                                      '6',
-                                      '7',
-                                      '8',
-                                      '9',
-                                      'A',
-                                      'B',
-                                      'C',
-                                      'D',
-                                      'E',
-                                      'F',};
+unsigned char VOLTAJE[10] =  {'0','1','2','3','4','5','6','7','8','9',};
 
 int Low_ADC1;
 int Low_ADC2;
@@ -70,8 +56,16 @@ int temp;
 int contadorNum = 0;
 int contadorDec = 0;
 int contadorDec2 = 0;
+int temp2;
+int contadorNum2 = 0;
+int contadorDec3 = 0;
+int contadorDec4 = 0;
 
-
+int DatoRecibido;
+int contadorUART = 0;
+int espacio = 32;
+int borrar = 8;
+int banderaUART1 = 1;
 
 //******************************************************************************
 // Vector de interrupcion
@@ -92,7 +86,19 @@ void __interrupt() ISR(void){
         High_ADC2 = DisplayHigh_ADC;
         Low_ADC2 = DisplayLow_ADC;
     }
+//****************************************************************
+//      INTERRUPCION UART
+//**************************************************************** 
+    InterruptReciboUSART(&DatoRecibido);
     
+    if (DatoRecibido == 43){
+        contadorUART = contadorUART + 1;
+        DatoRecibido = 32;
+    }
+    if (DatoRecibido == 45){
+        contadorUART = contadorUART - 1;
+        DatoRecibido = 32;
+    }
 }
 
 //******************************************************************************
@@ -104,7 +110,7 @@ void main(void) {
   unsigned int a;
   Lcd_Init();
   
-        Lcd_Clear();
+        Lcd_Clear(); //Interfaz grafica para la LCD
         Lcd_Set_Cursor(1,1);
         Lcd_Write_String("S1");
         Lcd_Set_Cursor(1,7);
@@ -118,6 +124,8 @@ void main(void) {
   while(1)
   {
 //******************************************************************************
+//  CONVERSION ADC       
+//******************************************************************************
         contador_ADC = 1;   //Indicamos en que puerto mostraremos nuestra conversion
         Read_ADC(13);        //Hacemos una conversion usando canal 13
         
@@ -127,11 +135,47 @@ void main(void) {
         Read_ADC(11);       //Hacemos una conversion usando canal 11
         
 //******************************************************************************
+//  CONTADOR LCD    
+//******************************************************************************
+        Lcd_Set_Cursor(2,14);
+        sprintf(prueba, "%d", contadorUART);    //convierte contador a string
+        Lcd_Write_String(prueba);               //Imprime contador o sensor 3
         
-        Lcd_Set_Cursor(2,1);
-        temp = (High_ADC2 << 4) + Low_ADC2;
+        if (contadorUART >= 0 ){                //Condiciones de seguridad para borrar ceros indeseados al incrementar y decrementar contador
+            if (contadorUART < 10){
+                Lcd_Set_Cursor(2,15);
+                Lcd_Write_String(" ");
+                Lcd_Set_Cursor(2,16);
+                Lcd_Write_String(" ");
+            }
+        }
+        if (contadorUART >= 10 ){
+            if (contadorUART < 100){
+                Lcd_Set_Cursor(2,16);
+                Lcd_Write_String(" ");
+            }
+        }
+        if (contadorUART <= 0 ){
+            if (contadorUART > -10){
+                Lcd_Set_Cursor(2,16);
+                Lcd_Write_String(" ");
+            }
+        }
+        if (contadorUART <= -10 ){
+            if (contadorUART > -100){
+                Lcd_Set_Cursor(2,17);
+                Lcd_Write_String(" ");
+            }
+        }
+        __delay_ms(5); //Imprimir en LCD la parte entera de la division:
         
-        while (temp > 0){
+//******************************************************************************
+//  PRIMER POTENCIOMETRO        
+//******************************************************************************     
+        Lcd_Set_Cursor(2,1);                    
+        temp = (High_ADC1 << 4) + Low_ADC1;     //Conversion completa ADC
+        
+        while (temp > 0){                       //Ciclos de divisiones para obtener un valor de 5V
             temp = temp - 51;
             contadorNum = contadorNum + 1; 
             if (temp <= 0){
@@ -139,16 +183,20 @@ void main(void) {
             }
         }
         if (temp == 0){
+            EnvioSerial(VOLTAJE[contadorNum]);  //Enviamos primero el numero serial y luego a la LCD
             sprintf(prueba, "%d", contadorNum);
             Lcd_Write_String(prueba);
             contadorNum = 0;
             __delay_ms(5); //Imprimir en LCD la parte entera de la division:
+            EnvioSerial('.');
             Lcd_Set_Cursor(2,2);
             Lcd_Write_Char('.'); 
             __delay_ms(5);  //Imprimir punto decimal
+            EnvioSerial('0');
             Lcd_Set_Cursor(2,3);
             Lcd_Write_Char('0'); 
             __delay_ms(5);  //Imprimir punto decimal
+            EnvioSerial('0');
             Lcd_Set_Cursor(2,4);
             Lcd_Write_Char('0'); 
             __delay_ms(5);  //Imprimir punto decimal
@@ -156,10 +204,12 @@ void main(void) {
         if (temp < 0){
             temp = temp + 51;
             contadorNum = contadorNum - 1;
+            EnvioSerial(VOLTAJE[contadorNum]);
             sprintf(prueba, "%d", contadorNum);
             Lcd_Write_String(prueba); 
             contadorNum = 0;
             __delay_ms(5); //Imprimir en LCD la parte entera de la division:
+            EnvioSerial('.');
             Lcd_Set_Cursor(2,2);
             Lcd_Write_Char('.'); 
             __delay_ms(5);  //Imprimir punto decimal
@@ -173,11 +223,13 @@ void main(void) {
                 }
             }
             if (temp == 0){
+            EnvioSerial(VOLTAJE[contadorDec]);    
             Lcd_Set_Cursor(2,3);
             sprintf(prueba, "%d", contadorDec);
             Lcd_Write_String(prueba); 
             contadorDec = 0;
             __delay_ms(5);  //Imprimir en LCD unico decimal de la division:
+            EnvioSerial('0');
             Lcd_Set_Cursor(2,4);
             Lcd_Write_Char('0'); 
             __delay_ms(5);  //Imprimir punto decimal
@@ -185,6 +237,7 @@ void main(void) {
             if (temp < 0){
             temp = temp + 51;
             contadorDec = contadorDec - 1;
+            EnvioSerial(VOLTAJE[contadorDec]);
             Lcd_Set_Cursor(2,3);
             sprintf(prueba, "%d", contadorDec);
             Lcd_Write_String(prueba); 
@@ -200,6 +253,7 @@ void main(void) {
                     }
                 }
                 if (temp == 0){
+                EnvioSerial(VOLTAJE[contadorDec2]);    
                 Lcd_Set_Cursor(2,4);
                 sprintf(prueba, "%d", contadorDec2);
                 Lcd_Write_String(prueba); 
@@ -209,6 +263,7 @@ void main(void) {
                 if (temp < 0){
                 temp = temp + 51;
                 contadorDec2 = contadorDec2 - 1;
+                EnvioSerial(VOLTAJE[contadorDec2]);
                 Lcd_Set_Cursor(2,4);
                 sprintf(prueba, "%d", contadorDec2);
                 Lcd_Write_String(prueba); 
@@ -217,6 +272,126 @@ void main(void) {
                 }
             }
         }
+        EnvioSerial('V');
+        EnvioSerial(espacio);
+//******************************************************************************
+//  SEGUNDO POTENCIOMETRO        
+//******************************************************************************        
+        Lcd_Set_Cursor(2,7);
+        temp = (High_ADC2 << 4) + Low_ADC2;
+        
+        while (temp > 0){
+            temp = temp - 51;
+            contadorNum2 = contadorNum2 + 1; 
+            if (temp <= 0){
+                break;
+            }
+        }
+        if (temp == 0){
+            EnvioSerial(VOLTAJE[contadorNum2]);
+            sprintf(prueba, "%d", contadorNum2);
+            Lcd_Write_String(prueba);
+            contadorNum2 = 0;
+            __delay_ms(5); //Imprimir en LCD la parte entera de la division:
+            EnvioSerial('.');
+            Lcd_Set_Cursor(2,8);
+            Lcd_Write_Char('.'); 
+            __delay_ms(5);  //Imprimir punto decimal
+            EnvioSerial('0');
+            Lcd_Set_Cursor(2,9);
+            Lcd_Write_Char('0'); 
+            __delay_ms(5);  //Imprimir punto decimal
+            EnvioSerial('0');
+            Lcd_Set_Cursor(2,10);
+            Lcd_Write_Char('0'); 
+            __delay_ms(5);  //Imprimir punto decimal
+        }
+        if (temp < 0){
+            temp = temp + 51;
+            contadorNum2 = contadorNum2 - 1;
+            EnvioSerial(VOLTAJE[contadorNum2]);
+            sprintf(prueba, "%d", contadorNum2);
+            Lcd_Write_String(prueba); 
+            contadorNum2 = 0;
+            __delay_ms(5); //Imprimir en LCD la parte entera de la division:
+            EnvioSerial('.');
+            Lcd_Set_Cursor(2,8);
+            Lcd_Write_Char('.'); 
+            __delay_ms(5);  //Imprimir punto decimal
+            temp = temp * 10;
+//*******************************************************************************            
+            while (temp > 0){
+            temp = temp - 51;
+            contadorDec3 = contadorDec3 + 1;
+                if (temp <= 0){
+                    break;
+                }
+            }
+            if (temp == 0){
+            EnvioSerial(VOLTAJE[contadorDec3]);
+            Lcd_Set_Cursor(2,9);
+            sprintf(prueba, "%d", contadorDec3);
+            Lcd_Write_String(prueba); 
+            contadorDec3 = 0;
+            __delay_ms(5);  //Imprimir en LCD unico decimal de la division:
+            EnvioSerial('0');
+            Lcd_Set_Cursor(2,10);
+            Lcd_Write_Char('0'); 
+            __delay_ms(5);  //Imprimir punto decimal
+            }
+            if (temp < 0){
+            temp = temp + 51;
+            contadorDec3 = contadorDec3 - 1;
+            EnvioSerial(VOLTAJE[contadorDec3]);
+            Lcd_Set_Cursor(2,9);
+            sprintf(prueba, "%d", contadorDec3);
+            Lcd_Write_String(prueba); 
+            contadorDec3 = 0;
+            __delay_ms(5);  //Imprimir en LCD el primer decimal de la division:
+            temp = temp * 10;
+//*******************************************************************************              
+                while (temp > 0){
+                temp = temp - 51;
+                contadorDec4 = contadorDec4 + 1;
+                    if (temp <= 0){
+                        break;
+                    }
+                }
+                if (temp == 0){
+                EnvioSerial(VOLTAJE[contadorDec4]);
+                Lcd_Set_Cursor(2,10);
+                sprintf(prueba, "%d", contadorDec4);
+                Lcd_Write_String(prueba); 
+                contadorDec4 = 0;
+                __delay_ms(5); //Imprimir en LCD unicos dos decimales de la division: 
+                }
+                if (temp < 0){
+                temp = temp + 51;
+                contadorDec4 = contadorDec4 - 1;
+                EnvioSerial(VOLTAJE[contadorDec4]);
+                Lcd_Set_Cursor(2,10);
+                sprintf(prueba, "%d", contadorDec4);
+                Lcd_Write_String(prueba); 
+                contadorDec4= 0;
+                 __delay_ms(5);  //Imprimir en LCD el segundo decimal de la division:
+                }
+            }
+        }
+        EnvioSerial('V');
+        EnvioSerial(espacio);
+        
+        EnvioSerial(borrar);  //Borramos la consola para que no se repitan valores o se sature la consola
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
+        EnvioSerial(borrar);
   }
     return;
 }
@@ -230,7 +405,7 @@ void Setup(void){
     PORTE = 0;
 
     TRISA = 0x00;
-    TRISC = 0x00;
+    TRISC = 0b10000000;
     TRISD = 0x00;
     TRISE = 0x00; 
 
@@ -247,6 +422,17 @@ void Setup(void){
     ADCON0bits.GO = 0;
     ADCON0bits.ADON = 1;
     ADCON1 = 0x80;
+    
+    //Configuración de la comunicación, recepción y transmisión
+    
+    SPBRG = 12; //baud rate 9600
+    SYNC = 0; //comunicación asíncrona
+    SPEN = 1; //habilita comunicación
+    CREN = 1;
+    TXEN = 1;
+    //Limpiamos bandera de recepción
+    RCIF = 0;
+    RCIE = 1; //Habilita interrupción de recepción
  
     ADIF = 0;   //Habilita interrupcion del adc
     ADIE = 1;
